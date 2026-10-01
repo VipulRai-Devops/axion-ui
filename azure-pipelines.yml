@@ -39,3 +39,46 @@ stages:
         PathtoPublish: 'dist'
         ArtifactName: 'frontend'
         publishLocation: 'Container'
+
+
+# =========================
+# Frontend CD
+# =========================
+- stage: Frontend_CD
+  displayName: Frontend CD
+  dependsOn: Frontend_CI
+  condition: succeeded()
+
+  jobs:
+  - deployment: DeployFrontend
+    displayName: Deploy Frontend to VM
+
+    environment: Axion-Frontend
+
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - download: current
+            artifact: frontend
+
+          - task: CopyFilesOverSSH@0
+            displayName: Copy Frontend Files to VM
+            inputs:
+              sshEndpoint: 'frontend-axion-vm'
+              sourceFolder: '$(Pipeline.Workspace)/frontend'
+              contents: '**'
+              targetFolder: '/tmp/axion-frontend'
+
+          - task: SSH@0
+            displayName: Deploy Frontend to Nginx
+            inputs:
+              sshEndpoint: 'frontend-axion-vm'
+              runOptions: inline
+              inline: |
+                sudo rm -rf /usr/share/nginx/html/*
+                sudo cp -r /tmp/axion-frontend/* /usr/share/nginx/html/
+                sudo nginx -t
+                sudo systemctl reload nginx
+                echo "Frontend deployment completed successfully"
