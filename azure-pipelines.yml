@@ -1,0 +1,48 @@
+trigger:
+- main
+
+pr:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+
+# =========================
+# Frontend CI
+# =========================
+- stage: Frontend_CI
+  displayName: Frontend CI
+
+  jobs:
+  - job: Build
+    displayName: Build React Application
+
+    steps:
+
+    - checkout: self
+
+    - task: NodeTool@0
+      displayName: Install Node.js
+      inputs:
+        versionSpec: '24.x'
+
+    - script: |
+        npm ci
+      displayName: Install Dependencies
+
+    - script: |
+        npm run lint
+      displayName: Run ESLint
+
+    - script: |
+        npm run build
+      displayName: Build React Application
+
+    - task: PublishBuildArtifacts@1
+      displayName: Publish Frontend Artifact
+      inputs:
+        PathtoPublish: 'dist'
+        ArtifactName: 'frontend'
+        publishLocation: 'Container'
