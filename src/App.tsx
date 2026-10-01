@@ -148,7 +148,7 @@ function App() {
           <div className="min-h-screen bg-[#09090b] text-slate-300 font-sans flex relative overflow-hidden noise-bg">
             {/* Giant Watermark */}
             <div className="fixed top-1/2 left-0 -translate-y-1/2 select-none pointer-events-none opacity-[0.02] z-0">
-              <h1 className="text-[25rem] font-black whitespace-nowrap tracking-tighter">AXION</h1>
+              <h1 className="text-[25rem] font-black whitespace-nowrap tracking-tighter">AXION v2</h1>
             </div>
 
             {/* Ambient Premium Glows */}
