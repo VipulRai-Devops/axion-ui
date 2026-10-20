@@ -14,10 +14,10 @@ pr:
 
 stages:
 - stage: Build
-  displayName: Build React App
+  displayName: Build
   jobs:
-  - job: BuildFrontend
-    displayName: Build and Publish
+  - job: BuildReact
+    displayName: Build React App
     steps:
     - checkout: self
 
@@ -26,48 +26,35 @@ stages:
         versionSpec: '22.x'
 
     - script: |
-        echo === Node and npm versions ===
-        node --version
-        call npm --version
-
-        echo === Install dependencies ===
         call npm ci
         if errorlevel 1 exit /b 1
-
-        echo === Run lint ===
-        call npm run lint
-        if errorlevel 1 exit /b 1
-
-        echo === Build production app ===
         call npm run build
         if errorlevel 1 exit /b 1
-
-        echo === Verify dist ===
         if not exist dist\index.html exit /b 1
         dir dist
       workingDirectory: '$(Build.SourcesDirectory)'
-      displayName: Build and Verify
+      displayName: Install and Build
 
     - task: PublishPipelineArtifact@1
-      displayName: Publish React Artifact
+      displayName: Publish Artifact
       inputs:
         targetPath: '$(Build.SourcesDirectory)/dist'
         artifact: axion-ui-dist
         publishLocation: pipeline
 
-- stage: Deploy
-  displayName: Deploy to Azure VM
+- stage: DeployToDev
+  displayName: Deploy to VM
   dependsOn: Build
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
   jobs:
   - job: DeployFrontend
-    displayName: Deploy to Nginx
+    displayName: Deploy Frontend
     steps:
     - download: current
       artifact: axion-ui-dist
 
     - task: CopyFilesOverSSH@0
-      displayName: Copy files to Ubuntu VM
+      displayName: Copy Artifact to VM
       inputs:
         sshEndpoint: Axion-VM-SSH
         sourceFolder: '$(Pipeline.Workspace)/axion-ui-dist'
@@ -75,13 +62,11 @@ stages:
         targetFolder: '/var/www/axion-ui'
         cleanTargetFolder: false
         overwrite: true
-        readyTimeout: '20000'
 
     - task: SSH@0
-      displayName: Validate and Reload Nginx
+      displayName: Reload Nginx
       inputs:
         sshEndpoint: Axion-VM-SSH
         runOptions: commands
         commands: |
           sudo -n nginx -t && sudo -n systemctl reload nginx
-          echo Deployment completed
