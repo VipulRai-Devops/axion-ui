@@ -1,16 +1,15 @@
-
 pool:
   name: Vistara-Agent
 
 trigger:
   branches:
     include:
-      - main
+    - main
 
 pr:
   branches:
     include:
-      - main
+    - main
 
 stages:
 - stage: Build
@@ -19,7 +18,8 @@ stages:
   - job: BuildFrontend
     steps:
     - task: NodeTool@0
-      displayName: Install, Lint and Build
+      displayName: Install, Build and Verify
+
       inputs:
         versionSpec: '22.x'
 
@@ -27,35 +27,36 @@ stages:
         npm ci
         npm run lint
         npm run build
-      
+        if not exist dist\index.html exit /b 1
+        dir dist
+
     - task: PublishPipelineArtifact@1
       inputs:
         targetPath: '$(Build.SourcesDirectory)/dist'
         artifact: axion-ui-dist
+        publishLocation: pipeline
 
 - stage: Deploy
+  displayName: Deploy Stage
   dependsOn: Build
   condition: succeeded()
   jobs:
-  - deployment: DeployFrontend
-    environment: axion-frontend-dev
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: axion-ui-dist
-
-          - task: Bash@3
-            displayName: Deploy to Nginx VM
-            inputs:
-              targetType: inline
-              script: |
-                set -e
-                SOURCE="$(Pipeline.Workspace)/axion-ui-dist"
-                TARGET="/var/www/axion-ui"
-                test -f "$SOURCE/index.html"
-                sudo mkdir -p "$TARGET"
-                sudo cp -a "$SOURCE/." "$TARGET/"
-                sudo nginx -t
-                sudo systemctl reload nginx
+  - job: DeployFrontend
+    steps:
+    - download: current
+      artifact: axion-ui-dist
+    - task: Bash@3
+      displayName: Deploy to Frontend VM
+      inputs:
+        targetType: inline
+        script: |
+          set -e
+          SOURCE="$(Pipeline.Workspace)/axion-ui-dist"
+          TARGET="/var/www/axion-ui"
+          test -f "$SOURCE/index.html"
+          sudo mkdir -p "$TARGET"
+          sudo find "$TARGET" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+          sudo cp -a "$SOURCE/." "$TARGET/"
+          sudo nginx -t
+          sudo systemctl reload nginx
+          echo "Axion UI deployed successfully"
