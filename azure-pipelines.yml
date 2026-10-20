@@ -22,13 +22,27 @@ stages:
         versionSpec: '22.x'
 
     - script: |
-        npm ci
+        echo === Node and npm versions ===
+        node --version
+        npm --version
+
+        echo === Install Dependencies ===
+        call npm ci
         if errorlevel 1 exit /b 1
-        npm run lint
+
+        echo === Run Lint ===
+        call npm run lint
         if errorlevel 1 exit /b 1
-        npm run build
+
+        echo === Build React App ===
+        call npm run build
         if errorlevel 1 exit /b 1
-        if not exist dist\index.html exit /b 1
+
+        echo === Verify Build Output ===
+        if not exist dist\index.html (
+          echo ERROR: dist\index.html was not created
+          exit /b 1
+        )
         dir dist
       workingDirectory: '$(Build.SourcesDirectory)'
       displayName: Build and Verify
