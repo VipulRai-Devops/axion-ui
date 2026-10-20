@@ -22,25 +22,34 @@ stages:
         versionSpec: '22.x'
 
     - script: |
-        echo === Node and npm versions ===
+        @echo on
+        echo === STEP 1: Node and npm versions ===
         node --version
         npm --version
 
-        echo === Install Dependencies ===
+        echo === STEP 2: Current directory ===
+        cd
+        echo Sources: $(Build.SourcesDirectory)
+        dir package.json
+
+        echo === STEP 3: Install dependencies ===
         call npm ci
+        echo npm ci exit code: %ERRORLEVEL%
         if errorlevel 1 exit /b 1
 
-        echo === Run Lint ===
+        echo === STEP 4: Run lint ===
         call npm run lint
+        echo lint exit code: %ERRORLEVEL%
         if errorlevel 1 exit /b 1
 
-        echo === Build React App ===
+        echo === STEP 5: Build app ===
         call npm run build
+        echo build exit code: %ERRORLEVEL%
         if errorlevel 1 exit /b 1
 
-        echo === Verify Build Output ===
+        echo === STEP 6: Verify dist ===
         if not exist dist\index.html (
-          echo ERROR: dist\index.html was not created
+          echo ERROR: dist\index.html missing
           exit /b 1
         )
         dir dist
