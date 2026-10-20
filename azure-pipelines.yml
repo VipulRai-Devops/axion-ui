@@ -1,77 +1,73 @@
+
 pool:
   name: Vistara-Agent
 
 trigger:
   branches:
     include:
-    - main
+      - main
 
 pr:
   branches:
     include:
-    - main
+      - main
 
 stages:
 - stage: Build
-  displayName: Build Stage
+  displayName: Build React App
   jobs:
   - job: BuildFrontend
+    displayName: Build and Publish
     steps:
+    - checkout: self
+
     - task: NodeTool@0
       inputs:
         versionSpec: '22.x'
 
     - script: |
-        @echo on
-        echo === STEP 1: Node and npm versions ===
+        echo === Node and npm versions ===
         node --version
-        npm --version
+        call npm --version
 
-        echo === STEP 2: Current directory ===
-        cd
-        echo Sources: $(Build.SourcesDirectory)
-        dir package.json
-
-        echo === STEP 3: Install dependencies ===
+        echo === Install dependencies ===
         call npm ci
-        echo npm ci exit code: %ERRORLEVEL%
         if errorlevel 1 exit /b 1
 
-        echo === STEP 4: Run lint ===
+        echo === Run lint ===
         call npm run lint
-        echo lint exit code: %ERRORLEVEL%
         if errorlevel 1 exit /b 1
 
-        echo === STEP 5: Build app ===
+        echo === Build production app ===
         call npm run build
-        echo build exit code: %ERRORLEVEL%
         if errorlevel 1 exit /b 1
 
-        echo === STEP 6: Verify dist ===
-        if not exist dist\index.html (
-          echo ERROR: dist\index.html missing
-          exit /b 1
-        )
+        echo === Verify dist ===
+        if not exist dist\index.html exit /b 1
         dir dist
       workingDirectory: '$(Build.SourcesDirectory)'
       displayName: Build and Verify
 
     - task: PublishPipelineArtifact@1
+      displayName: Publish React Artifact
       inputs:
         targetPath: '$(Build.SourcesDirectory)/dist'
         artifact: axion-ui-dist
+        publishLocation: pipeline
 
 - stage: Deploy
-  displayName: Deploy Stage
+  displayName: Deploy to Azure VM
   dependsOn: Build
-  condition: succeeded()
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
   jobs:
   - job: DeployFrontend
+    displayName: Deploy to Nginx
     steps:
     - download: current
       artifact: axion-ui-dist
 
     - task: CopyFilesOverSSH@0
+      displayName: Copy files to Ubuntu VM
       inputs:
         sshEndpoint: Axion-VM-SSH
         sourceFolder: '$(Pipeline.Workspace)/axion-ui-dist'
@@ -79,10 +75,13 @@ stages:
         targetFolder: '/var/www/axion-ui'
         cleanTargetFolder: false
         overwrite: true
+        readyTimeout: '20000'
 
     - task: SSH@0
+      displayName: Validate and Reload Nginx
       inputs:
         sshEndpoint: Axion-VM-SSH
         runOptions: commands
         commands: |
-          sudo nginx -t && sudo systemctl reload nginx
+          sudo -n nginx -t && sudo -n systemctl reload nginx
+          echo Deployment completed
