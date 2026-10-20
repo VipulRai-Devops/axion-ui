@@ -1,7 +1,4 @@
 
-pool:
-  name: Vistara-Agent
-
 trigger:
   branches:
     include:
@@ -14,10 +11,12 @@ pr:
 
 stages:
 - stage: Build
-  displayName: Build
+  displayName: Build React App
   jobs:
   - job: BuildReact
-    displayName: Build React App
+    displayName: Install and Build
+    pool:
+      vmImage: ubuntu-latest
     steps:
     - checkout: self
 
@@ -25,30 +24,31 @@ stages:
       inputs:
         versionSpec: '22.x'
 
-    - script: |
-        call npm ci
-        if errorlevel 1 exit /b 1
-        call npm run build
-        if errorlevel 1 exit /b 1
-        if not exist dist\index.html exit /b 1
-        dir dist
-      workingDirectory: '$(Build.SourcesDirectory)'
+    - bash: |
+        set -e
+        npm ci
+        npm run build
+        test -f dist/index.html
+        echo "Build completed successfully"
+      workingDirectory: $(Build.SourcesDirectory)
       displayName: Install and Build
 
     - task: PublishPipelineArtifact@1
       displayName: Publish Artifact
       inputs:
-        targetPath: '$(Build.SourcesDirectory)/dist'
+        targetPath: $(Build.SourcesDirectory)/dist
         artifact: axion-ui-dist
         publishLocation: pipeline
 
-- stage: DeployToDev
-  displayName: Deploy to VM
+- stage: DeployToProd
+  displayName: Deploy to Production VM
   dependsOn: Build
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
   jobs:
-  - job: DeployFrontend
-    displayName: Deploy Frontend
+  - job: DeployProduction
+    displayName: Copy Files and Reload Nginx
+    pool:
+      name: Vistara-Agent
     steps:
     - download: current
       artifact: axion-ui-dist
@@ -57,16 +57,20 @@ stages:
       displayName: Copy Artifact to VM
       inputs:
         sshEndpoint: Axion-VM-SSH
-        sourceFolder: '$(Pipeline.Workspace)/axion-ui-dist'
+        sourceFolder: $(Pipeline.Workspace)/axion-ui-dist
         contents: '**'
-        targetFolder: '/var/www/axion-ui'
+        targetFolder: /var/www/axion-ui
         cleanTargetFolder: false
         overwrite: true
 
     - task: SSH@0
-      displayName: Reload Nginx
+      displayName: Validate and Reload Nginx
       inputs:
         sshEndpoint: Axion-VM-SSH
         runOptions: commands
         commands: |
-          sudo -n nginx -t && sudo -n systemctl reload nginx
+          set -e
+          sudo -n nginx -t
+          sudo -n systemctl reload nginx
+          sudo -n systemctl is-active nginx
+          echo "Production deployment completed successfully"
