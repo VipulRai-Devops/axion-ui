@@ -14,27 +14,39 @@ stages:
   displayName: Build React App
   jobs:
   - job: BuildReact
-    displayName: Install and Build
+    displayName: Install, Build and Publish
     pool:
       vmImage: ubuntu-latest
     steps:
     - checkout: self
 
     - task: NodeTool@0
+      displayName: Use Node.js 22
       inputs:
         versionSpec: '22.x'
 
     - bash: |
         set -e
+        echo "=== Node version ==="
+        node --version
+        npm --version
+
+        echo "=== Install dependencies ==="
         npm ci
+
+        echo "=== Build React application ==="
         npm run build
+
+        echo "=== Verify build output ==="
         test -f dist/index.html
+        ls -la dist
+
         echo "Build completed successfully"
       workingDirectory: $(Build.SourcesDirectory)
       displayName: Install and Build
 
     - task: PublishPipelineArtifact@1
-      displayName: Publish Artifact
+      displayName: Publish React Artifact
       inputs:
         targetPath: $(Build.SourcesDirectory)/dist
         artifact: axion-ui-dist
@@ -46,7 +58,7 @@ stages:
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
   jobs:
   - job: DeployProduction
-    displayName: Copy Files and Reload Nginx
+    displayName: Deploy React App
     pool:
       name: Vistara-Agent
     steps:
@@ -69,8 +81,13 @@ stages:
         sshEndpoint: Axion-VM-SSH
         runOptions: commands
         commands: |
-          set -e
-          sudo -n nginx -t
-          sudo -n systemctl reload nginx
-          sudo -n systemctl is-active nginx
+          echo "=== Validate Nginx configuration ==="
+          sudo -n nginx -t || exit 1
+
+          echo "=== Reload Nginx ==="
+          sudo -n systemctl reload nginx || exit 1
+
+          echo "=== Check Nginx status ==="
+          sudo -n systemctl is-active --quiet nginx || exit 1
+
           echo "Production deployment completed successfully"
