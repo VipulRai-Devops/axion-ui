@@ -1,3 +1,4 @@
+pool: Vistara-Agent
 
 trigger:
   branches:
@@ -15,8 +16,6 @@ stages:
   jobs:
   - job: BuildReact
     displayName: Install, Build and Publish
-    pool:
-      vmImage: ubuntu-latest
     steps:
     - checkout: self
 
@@ -59,8 +58,6 @@ stages:
   jobs:
   - job: DeployProduction
     displayName: Deploy React App
-    pool:
-      name: Vistara-Agent
     steps:
     - download: current
       artifact: axion-ui-dist
